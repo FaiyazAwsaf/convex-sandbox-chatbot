@@ -1,5 +1,7 @@
-// TODO: Add ConvexProvider wrapping and global styles
 import type { Metadata } from "next";
+import { ConvexClientProvider } from "./ConvexClientProvider";
+import { ErrorBoundary } from "./ErrorBoundary";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Convex Sandbox Chatbot",
@@ -11,10 +13,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // TODO: Wrap with ConvexProvider using NEXT_PUBLIC_CONVEX_URL
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="bg-gray-950 text-gray-100 h-screen overflow-hidden">
+        <ConvexClientProvider>
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </ConvexClientProvider>
+      </body>
     </html>
   );
 }

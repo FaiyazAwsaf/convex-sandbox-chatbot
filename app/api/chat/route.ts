@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { sandboxManager } from "../../../lib/sandbox";
 import { createAgentForThread, runAgentTurn } from "../../../lib/agent";
 import type { ToolCallInfo } from "../../../lib/agent";
@@ -47,7 +48,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { threadId, message, sandboxId: incomingSandboxId } = body;
+  // threadId arrives as a plain string from JSON; cast to the branded Convex type.
+  const threadId = body.threadId as Id<"threads">;
+  const { message, sandboxId: incomingSandboxId } = body;
 
   if (!threadId || !message) {
     return new Response(
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest) {
   // ---------------------------------------------------------------------------
   (async () => {
     let sandboxId: string | undefined = incomingSandboxId;
-    let assistantMessageId: string | null = null;
+    let assistantMessageId: Id<"messages"> | null = null;
 
     try {
       // 1. Provision sandbox if this is the first message on the thread
@@ -166,20 +169,14 @@ export async function POST(req: NextRequest) {
             const output = JSON.stringify(info.result ?? "");
             const executionOrder = pending?.order ?? 0;
 
-            // Write the completed tool log to Convex.
-            // skipQueue so concurrent tool logs don't block each other.
-            await convex.mutation(
-              api.toolLogs.logTool,
-              {
-                threadId,
-                messageId: assistantMessageId!,
-                toolName: info.toolName,
-                input,
-                output,
-                executionOrder,
-              },
-              { skipQueue: true }
-            );
+            await convex.mutation(api.toolLogs.logTool, {
+              threadId,
+              messageId: assistantMessageId!,
+              toolName: info.toolName,
+              input,
+              output,
+              executionOrder,
+            });
 
             sendEvent({
               type: "tool_end",
@@ -197,15 +194,11 @@ export async function POST(req: NextRequest) {
       );
 
       // 6. Persist the full assistant content and mark done
-      await convex.mutation(
-        api.messages.updateMessage,
-        {
-          messageId: assistantMessageId!,
-          content: accumulatedContent,
-          status: "done",
-        },
-        { skipQueue: true }
-      );
+      await convex.mutation(api.messages.updateMessage, {
+        messageId: assistantMessageId!,
+        content: accumulatedContent,
+        status: "done",
+      });
 
       sendEvent({ type: "done" });
     } catch (err) {
@@ -214,11 +207,7 @@ export async function POST(req: NextRequest) {
       // Best-effort: mark the in-progress assistant message as errored
       if (assistantMessageId) {
         await convex
-          .mutation(
-            api.messages.updateMessage,
-            { messageId: assistantMessageId, status: "error" },
-            { skipQueue: true }
-          )
+          .mutation(api.messages.updateMessage, { messageId: assistantMessageId, status: "error" })
           .catch(() => {});
       }
 

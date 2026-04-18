@@ -1,4 +1,5 @@
-import { getModel, Type } from "@mariozechner/pi-ai";
+import { Type } from "@mariozechner/pi-ai";
+import type { Model } from "@mariozechner/pi-ai";
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentTool, AgentToolResult, AgentEvent } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
@@ -53,7 +54,20 @@ function textResult(text: string): AgentToolResult<string> {
  * the full lifetime of the thread.
  */
 export function createAgentForThread(threadId: string, sandboxId: string): Agent {
-  const model = getModel("anthropic", "claude-sonnet-4-6");
+  // ChatLLM by Abacus AI — OpenAI-compatible endpoint.
+  // Set CHATLLM_BASE_URL and CHATLLM_MODEL in .env.local.
+  const model: Model<"openai-completions"> = {
+    id: process.env.CHATLLM_MODEL ?? "claude-sonnet-4-6",
+    name: "ChatLLM",
+    api: "openai-completions",
+    provider: "openai",
+    baseUrl: process.env.CHATLLM_BASE_URL ?? "https://api.abacus.ai/api/v0/chatllm/openai/v1",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000,
+    maxTokens: 8192,
+  };
 
   // -------------------------------------------------------------------------
   // Tool definitions — all execution is delegated to the Daytona VM
@@ -245,8 +259,7 @@ export function createAgentForThread(threadId: string, sandboxId: string): Agent
           (m as { role: string }).role === "assistant" ||
           (m as { role: string }).role === "toolResult"
       ),
-    // Resolve the API key dynamically so it can be rotated without restarting.
-    getApiKey: () => process.env.ANTHROPIC_API_KEY,
+    getApiKey: () => process.env.CHATLLM_API_KEY,
   });
 }
 

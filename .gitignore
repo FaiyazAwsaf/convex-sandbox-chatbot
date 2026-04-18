@@ -1,3 +1,11 @@
 node_modules
 CLAUDE.md
 .claude
+TASK_PROGRESS.md
+.env.local
+.env*.local
+.agents/
+.next/
+out/
+tsconfig.tsbuildinfo
+skills-lock.json
