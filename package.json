@@ -1,0 +1,33 @@
+{
+  "name": "convex-sandbox-chatbot",
+  "version": "1.0.0",
+  "description": "Chatbot with isolated Daytona VM per conversation thread. Pi Agent runs inside the VM.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FaiyazAwsaf/convex-sandbox-chatbot.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@daytona/sdk": "^0.167.0",
+    "@mariozechner/pi-agent-core": "^0.67.68",
+    "@mariozechner/pi-ai": "^0.67.68",
+    "@mariozechner/pi-coding-agent": "^0.67.68",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "convex": "^1.35.1",
+    "next": "^16.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
