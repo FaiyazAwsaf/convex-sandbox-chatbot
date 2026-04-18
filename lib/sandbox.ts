@@ -1,35 +1,130 @@
-// TODO: Daytona sandbox manager
-// Responsibilities:
-// - createSandbox(threadId) → sandboxId
-//   - Uses @daytona/sdk to spin up a new VM
-//   - Installs Pi Agent packages inside the VM
-//   - Returns the sandboxId to store in Convex
-// - getSandbox(sandboxId) → Sandbox instance
-// - destroySandbox(sandboxId)
-//
-// IMPORTANT: This module runs in the Next.js server (API route / server action).
-// It provisions the VM and bootstraps the Pi Agent inside it.
-// The Pi Agent itself MUST run inside the Daytona VM, not here.
-//
-// See Daytona TS SDK: https://www.daytona.io/docs/en/typescript-sdk/
+import { Daytona, CodeLanguage } from "@daytona/sdk";
+import type { Sandbox } from "@daytona/sdk";
 
-// TODO: import Daytona from "@daytona/sdk"
+/**
+ * Manages the lifecycle of Daytona VM sandboxes.
+ * Runs in the Next.js server (API routes / server actions).
+ * The Pi Agent itself runs INSIDE the VM — not here.
+ */
+class SandboxManager {
+  private daytona: Daytona;
 
-export async function createSandbox(_threadId: string): Promise<string> {
-  // TODO:
-  // 1. new Daytona({ apiKey: process.env.DAYTONA_API_KEY })
-  // 2. daytona.sandbox.create({ ... })
-  // 3. Install Pi Agent deps inside VM via sandbox.exec
-  // 4. Return sandboxId
-  throw new Error("Not implemented");
+  constructor() {
+    // Reads DAYTONA_API_KEY from env by default.
+    // Throws DaytonaError at construction time if the key is missing.
+    this.daytona = new Daytona({
+      apiKey: process.env.DAYTONA_API_KEY,
+    });
+  }
+
+  /**
+   * Provisions a new TypeScript sandbox for a conversation thread.
+   * Auto-stops after 10 minutes of inactivity to control costs.
+   * Returns the sandbox ID to persist in Convex (threads.sandboxId).
+   */
+  async createSandbox(threadId: string): Promise<string> {
+    try {
+      const sandbox = await this.daytona.create(
+        {
+          language: CodeLanguage.TYPESCRIPT,
+          autoStopInterval: 10, // minutes
+          labels: { threadId },
+        },
+        { timeout: 120 } // 2-minute timeout for VM boot
+      );
+      return sandbox.id;
+    } catch (error) {
+      throw new Error(
+        `Failed to create sandbox for thread ${threadId}: ${String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Retrieves an existing sandbox by its ID.
+   * Throws if the sandbox does not exist or is not reachable.
+   */
+  async getSandbox(sandboxId: string): Promise<Sandbox> {
+    try {
+      return await this.daytona.get(sandboxId);
+    } catch (error) {
+      throw new Error(
+        `Failed to get sandbox ${sandboxId}: ${String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Runs a shell command inside the sandbox and returns stdout.
+   * Throws if the command exits with a non-zero code.
+   */
+  async runCommand(sandboxId: string, command: string): Promise<string> {
+    try {
+      const sandbox = await this.getSandbox(sandboxId);
+      const response = await sandbox.process.executeCommand(command);
+
+      if (response.exitCode !== 0) {
+        throw new Error(
+          `Command exited with code ${response.exitCode}: ${response.result}`
+        );
+      }
+
+      return response.result;
+    } catch (error) {
+      throw new Error(
+        `Failed to run command in sandbox ${sandboxId}: ${String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Reads a file from the sandbox filesystem and returns its content as a string.
+   */
+  async readFile(sandboxId: string, path: string): Promise<string> {
+    try {
+      const sandbox = await this.getSandbox(sandboxId);
+      const buffer = await sandbox.fs.downloadFile(path);
+      return buffer.toString("utf-8");
+    } catch (error) {
+      throw new Error(
+        `Failed to read file ${path} from sandbox ${sandboxId}: ${String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Writes a string to a file in the sandbox filesystem.
+   * Creates the file if it does not exist; overwrites if it does.
+   */
+  async writeFile(
+    sandboxId: string,
+    path: string,
+    content: string
+  ): Promise<void> {
+    try {
+      const sandbox = await this.getSandbox(sandboxId);
+      await sandbox.fs.uploadFile(Buffer.from(content, "utf-8"), path);
+    } catch (error) {
+      throw new Error(
+        `Failed to write file ${path} in sandbox ${sandboxId}: ${String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Permanently deletes a sandbox and releases all associated resources.
+   * Should be called when a thread is closed.
+   */
+  async deleteSandbox(sandboxId: string): Promise<void> {
+    try {
+      const sandbox = await this.getSandbox(sandboxId);
+      await this.daytona.delete(sandbox);
+    } catch (error) {
+      throw new Error(
+        `Failed to delete sandbox ${sandboxId}: ${String(error)}`
+      );
+    }
+  }
 }
 
-export async function getSandbox(_sandboxId: string) {
-  // TODO: return live sandbox handle from Daytona SDK
-  throw new Error("Not implemented");
-}
-
-export async function destroySandbox(_sandboxId: string): Promise<void> {
-  // TODO: daytona.sandbox.delete(sandboxId)
-  throw new Error("Not implemented");
-}
+export const sandboxManager = new SandboxManager();
