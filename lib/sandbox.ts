@@ -116,8 +116,18 @@ class SandboxManager {
    * Should be called when a thread is closed.
    */
   async deleteSandbox(sandboxId: string): Promise<void> {
+    const sandbox = await this.getSandbox(sandboxId);
+
+    // A running sandbox must be stopped before it can be deleted.
     try {
-      const sandbox = await this.getSandbox(sandboxId);
+      await this.daytona.stop(sandbox);
+    } catch (error) {
+      throw new Error(
+        `Failed to stop sandbox ${sandboxId} before deletion: ${String(error)}`
+      );
+    }
+
+    try {
       await this.daytona.delete(sandbox);
     } catch (error) {
       throw new Error(
