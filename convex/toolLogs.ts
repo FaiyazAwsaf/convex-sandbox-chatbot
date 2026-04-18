@@ -26,6 +26,18 @@ export const logTool = mutation({
   },
 });
 
+// Updates the output of an existing tool log row.
+// Called on onToolCall "end" to fill in the result after execution completes.
+export const updateToolLog = mutation({
+  args: {
+    toolLogId: v.id("toolLogs"),
+    output: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.toolLogId, { output: args.output });
+  },
+});
+
 // Returns all tool logs for a thread ordered by execution sequence.
 // Used by the UI to render the tool call trace under each assistant message.
 export const getToolLogs = query({

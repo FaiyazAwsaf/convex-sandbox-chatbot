@@ -58,6 +58,20 @@ export const updateMessage = mutation({
   },
 });
 
+// Atomically appends a token chunk to an existing message's content.
+// Used by the API route during streaming to avoid full-content overwrites.
+export const appendMessageContent = mutation({
+  args: {
+    messageId: v.id("messages"),
+    chunk: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.messageId);
+    if (!msg) throw new Error("Message not found");
+    await ctx.db.patch(args.messageId, { content: msg.content + args.chunk });
+  },
+});
+
 // Returns all messages for a thread in chronological order.
 export const getMessages = query({
   args: { threadId: v.id("threads") },
