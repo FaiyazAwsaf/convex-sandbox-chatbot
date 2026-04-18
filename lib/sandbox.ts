@@ -14,6 +14,7 @@ class SandboxManager {
     // Throws DaytonaError at construction time if the key is missing.
     this.daytona = new Daytona({
       apiKey: process.env.DAYTONA_API_KEY,
+      apiUrl: process.env.DAYTONA_API_URL,
     });
   }
 
@@ -32,6 +33,8 @@ class SandboxManager {
         },
         { timeout: 120 } // 2-minute timeout for VM boot
       );
+      // Wait for the container to fully boot and get a reachable IP.
+      await this.daytona.start(sandbox, 60);
       return sandbox.id;
     } catch (error) {
       throw new Error(
