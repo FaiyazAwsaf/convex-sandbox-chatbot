@@ -1,6 +1,6 @@
 # Convex Sandbox Chatbot
 
-A chatbot where every conversation thread gets its own isolated Daytona VM. The Pi Agent reasoning loop runs **inside** that VM — not on the Next.js server. Convex is the real-time backend/database. TypeScript throughout.
+This project is a sandboxed chatbot architecture where every conversation spins up its own isolated VM running a Pi Agent. The agent can execute tools (bash, read/write/edit files, grep, glob, webfetch, websearch) inside its VM, while the Convex backend orchestrates threads, sessions, and tool logs.
 
 ---
 
