@@ -31,7 +31,7 @@ class SandboxManager {
           autoStopInterval: 10, // minutes
           labels: { threadId },
         },
-        { timeout: 120 } // 2-minute timeout for VM boot
+        { timeout: 120 }, // 2-minute timeout for VM boot
       );
       // Wait for the container to fully boot and get a reachable IP.
       await this.daytona.start(sandbox, 60);
@@ -41,7 +41,7 @@ class SandboxManager {
       return sandbox.id;
     } catch (error) {
       throw new Error(
-        `Failed to create sandbox for thread ${threadId}: ${String(error)}`
+        `Failed to create sandbox for thread ${threadId}: ${String(error)}`,
       );
     }
   }
@@ -59,9 +59,7 @@ class SandboxManager {
       }
       return sandbox;
     } catch (error) {
-      throw new Error(
-        `Failed to get sandbox ${sandboxId}: ${String(error)}`
-      );
+      throw new Error(`Failed to get sandbox ${sandboxId}: ${String(error)}`);
     }
   }
 
@@ -76,14 +74,14 @@ class SandboxManager {
 
       if (response.exitCode !== 0) {
         throw new Error(
-          `Command exited with code ${response.exitCode}: ${response.result}`
+          `Command exited with code ${response.exitCode}: ${response.result}`,
         );
       }
 
       return response.result;
     } catch (error) {
       throw new Error(
-        `Failed to run command in sandbox ${sandboxId}: ${String(error)}`
+        `Failed to run command in sandbox ${sandboxId}: ${String(error)}`,
       );
     }
   }
@@ -98,7 +96,7 @@ class SandboxManager {
       return buffer.toString("utf-8");
     } catch (error) {
       throw new Error(
-        `Failed to read file ${path} from sandbox ${sandboxId}: ${String(error)}`
+        `Failed to read file ${path} from sandbox ${sandboxId}: ${String(error)}`,
       );
     }
   }
@@ -110,14 +108,14 @@ class SandboxManager {
   async writeFile(
     sandboxId: string,
     path: string,
-    content: string
+    content: string,
   ): Promise<void> {
     try {
       const sandbox = await this.getSandbox(sandboxId);
       await sandbox.fs.uploadFile(Buffer.from(content, "utf-8"), path);
     } catch (error) {
       throw new Error(
-        `Failed to write file ${path} in sandbox ${sandboxId}: ${String(error)}`
+        `Failed to write file ${path} in sandbox ${sandboxId}: ${String(error)}`,
       );
     }
   }
@@ -128,13 +126,19 @@ class SandboxManager {
    */
   async installDependencies(sandboxId: string): Promise<void> {
     try {
+      // Write an ESM-mode package.json first. npm init -y omits "type":"module"
+      // which makes Node.js use CJS, breaking ESM-only packages like pi-ai.
       await this.runCommand(
         sandboxId,
-        "npm install --save @mariozechner/pi-agent-core @mariozechner/pi-ai tsx convex 2>&1"
+        [
+          "mkdir -p /tmp/agent",
+          'printf \'{"name":"agent","version":"1.0.0","type":"module","private":true}\\n\' > /tmp/agent/package.json',
+          "cd /tmp/agent && npm install --save @mariozechner/pi-agent-core @mariozechner/pi-ai @sinclair/typebox convex tsx 2>&1",
+        ].join(" && "),
       );
     } catch (error) {
       throw new Error(
-        `Failed to install agent dependencies in sandbox ${sandboxId}: ${String(error)}`
+        `Failed to install agent dependencies in sandbox ${sandboxId}: ${String(error)}`,
       );
     }
   }
@@ -149,16 +153,16 @@ class SandboxManager {
   async runScript(
     sandboxId: string,
     script: string,
-    env: Record<string, string>
+    env: Record<string, string>,
   ): Promise<{ exitCode: number; output: string }> {
-    const scriptPath = "/tmp/agent-runner.ts";
+    const scriptPath = "/tmp/agent/agent-runner.ts";
     await this.writeFile(sandboxId, scriptPath, script);
 
     const sandbox = await this.getSandbox(sandboxId);
     const response = await sandbox.process.executeCommand(
-      `tsx ${scriptPath}`,
-      undefined, // cwd — use sandbox default
-      env
+      `/tmp/agent/node_modules/.bin/tsx ${scriptPath}`,
+      "/tmp/agent", // cwd — resolves node_modules relative to /tmp/agent
+      env,
     );
 
     return {
@@ -179,7 +183,7 @@ class SandboxManager {
       await this.daytona.stop(sandbox);
     } catch (error) {
       throw new Error(
-        `Failed to stop sandbox ${sandboxId} before deletion: ${String(error)}`
+        `Failed to stop sandbox ${sandboxId} before deletion: ${String(error)}`,
       );
     }
 
@@ -187,7 +191,7 @@ class SandboxManager {
       await this.daytona.delete(sandbox);
     } catch (error) {
       throw new Error(
-        `Failed to delete sandbox ${sandboxId}: ${String(error)}`
+        `Failed to delete sandbox ${sandboxId}: ${String(error)}`,
       );
     }
   }
