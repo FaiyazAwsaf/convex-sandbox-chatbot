@@ -35,6 +35,9 @@ class SandboxManager {
       );
       // Wait for the container to fully boot and get a reachable IP.
       await this.daytona.start(sandbox, 60);
+      // Pre-install the npm packages the in-VM agent runner needs so the first
+      // message doesn't pay the install cost at prompt time.
+      await this.installDependencies(sandbox.id);
       return sandbox.id;
     } catch (error) {
       throw new Error(
@@ -49,7 +52,12 @@ class SandboxManager {
    */
   async getSandbox(sandboxId: string): Promise<Sandbox> {
     try {
-      return await this.daytona.get(sandboxId);
+      const sandbox = await this.daytona.get(sandboxId);
+      // Auto-restart if the sandbox stopped due to inactivity timeout.
+      if (sandbox.state !== "started") {
+        await this.daytona.start(sandbox, 60);
+      }
+      return sandbox;
     } catch (error) {
       throw new Error(
         `Failed to get sandbox ${sandboxId}: ${String(error)}`
@@ -112,6 +120,51 @@ class SandboxManager {
         `Failed to write file ${path} in sandbox ${sandboxId}: ${String(error)}`
       );
     }
+  }
+
+  /**
+   * Installs the npm packages required by the in-VM agent runner.
+   * Called automatically at the end of createSandbox, before returning the ID.
+   */
+  async installDependencies(sandboxId: string): Promise<void> {
+    try {
+      await this.runCommand(
+        sandboxId,
+        "npm install --save @mariozechner/pi-agent-core @mariozechner/pi-ai tsx convex 2>&1"
+      );
+    } catch (error) {
+      throw new Error(
+        `Failed to install agent dependencies in sandbox ${sandboxId}: ${String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Uploads a TypeScript script to /tmp/agent-runner.ts inside the VM and
+   * executes it with `tsx`, injecting the provided environment variables.
+   *
+   * Unlike runCommand, this method never throws on a non-zero exit code —
+   * the caller is responsible for interpreting the result.
+   */
+  async runScript(
+    sandboxId: string,
+    script: string,
+    env: Record<string, string>
+  ): Promise<{ exitCode: number; output: string }> {
+    const scriptPath = "/tmp/agent-runner.ts";
+    await this.writeFile(sandboxId, scriptPath, script);
+
+    const sandbox = await this.getSandbox(sandboxId);
+    const response = await sandbox.process.executeCommand(
+      `tsx ${scriptPath}`,
+      undefined, // cwd — use sandbox default
+      env
+    );
+
+    return {
+      exitCode: response.exitCode,
+      output: response.result ?? "",
+    };
   }
 
   /**
